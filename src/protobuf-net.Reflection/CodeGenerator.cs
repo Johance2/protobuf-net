@@ -164,8 +164,16 @@ namespace ProtoBuf.Reflection
                     WriteFile(ctx, file);
                     generated = buffer.ToString();
                 }
-                yield return new CodeFile(fileName, generated);
+                yield return new CodeFile(ToPascalCase(fileName), generated);
             }
+        }
+        static string ToPascalCase(string s)
+        {
+            return string.Concat(
+                s.Split('_')
+                 .Where(x => x.Length > 0)
+                 .Select(x => char.ToUpper(x[0]) + x.Substring(1))
+            );
         }
 
         static string GetNamespace(DescriptorProto message, string defaultNamespace)
@@ -312,6 +320,11 @@ namespace ProtoBuf.Reflection
             object state = null;
             if (ShouldOmitMessage(ctx, message, ref state)) return;
 
+            if (message.Parent as DescriptorProto != null)
+            {
+                var tw = ctx.Write($"{GetAccess(GetAccess(message))} partial class Types");
+                ctx.WriteLine("{").Indent();
+            }
             WriteMessageHeader(ctx, message, ref state);
             var oneOfs = OneOfStub.Build(message);
 
@@ -355,6 +368,10 @@ namespace ProtoBuf.Reflection
                 WriteExtensionsFooter(ctx, message, ref extState);
             }
             WriteMessageFooter(ctx, message, ref state);
+            if (message.Parent as DescriptorProto != null)
+            {
+                ctx.WriteLine("}").Outdent();
+            }
         }
 
         /// <summary>
