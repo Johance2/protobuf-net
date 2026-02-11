@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using ProtoBuf.Internal;
+using System.Runtime.CompilerServices;
 
 namespace ProtoBuf.Reflection
 {
@@ -210,7 +211,54 @@ namespace ProtoBuf.Reflection
             }
 
             WriteOptions(ctx, @enum.Options);
+
+            name = NormalizeName(@enum.Name);
+            name = name.Replace("_", "");
+            if (name.StartsWith(@enum.Parent.Name))
+            {
+                name = name.Substring(@enum.Parent.Name.Length);
+            }
             ctx.WriteLine($"{Escape(name)} = {@enum.Number},");
+        }
+        static string NormalizeName(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return s;
+
+            char[] arr = s.ToCharArray();
+
+            // 首字母大写
+            arr[0] = char.ToUpper(arr[0]);
+
+            bool lastUpper = false;
+            for (int i = 1; i < arr.Length; i++)
+            {
+                if(arr[i-1] == '_')
+                {
+                    arr[i] = char.ToUpper(arr[i]);
+                }
+
+                if (char.IsUpper(arr[i]))
+                {
+                    if (lastUpper)
+                    {
+                        //bool nextLower = (i + 1 < arr.Length) && char.IsLower(arr[i + 1]);
+
+                        //// 前一个是大写，并且下一个不是小写 => 属于连续缩写中间
+                        //if (!nextLower)
+                        {
+                            arr[i] = char.ToLower(arr[i]);
+                        }
+                    }
+                    lastUpper = true;
+                }
+                else
+                {
+                    lastUpper = false;
+                }
+            }
+
+            return new string(arr);
         }
 
         /// <summary>
@@ -250,7 +298,7 @@ namespace ProtoBuf.Reflection
             tw.WriteLine(")]");
             WriteOptions(ctx, message.Options);
             tw = ctx.Write($"{GetAccess(GetAccess(message))} partial class {Escape(name)}");
-            tw.Write(" : global::ProtoBuf.IExtensible");
+            tw.Write(" : global::Google.Protobuf.IMessage");
             //if (UsePooledMemory(ctx, message))
             //{
             //    tw.Write(", global::System.IDisposable");
@@ -263,7 +311,7 @@ namespace ProtoBuf.Reflection
             }
 
             ctx.WriteLine($"private global::ProtoBuf.IExtension {FieldPrefix}extensionData;")
-                .WriteLine($"global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)");
+                .WriteLine($"public override global::ProtoBuf.IExtension GetExtensionObject(bool createIfMissing)");
 
             if (ctx.Supports(CSharp6))
             {
@@ -273,6 +321,10 @@ namespace ProtoBuf.Reflection
             {
                 ctx.WriteLine("{").Indent().WriteLine($"return global::ProtoBuf.Extensible.GetExtensionObject(ref {FieldPrefix}extensionData, createIfMissing);").Outdent().WriteLine("}");
             }
+
+            ctx = ctx.WriteLine($"public {Escape(name)}() {{}}");
+            ctx = ctx.WriteLine($"public {Escape(name)}({Escape(name)} other) {{ MergeFrom(other);}}");
+            ctx = ctx.WriteLine($"public static string FullName = \"{Escape(name)}\";");
         }
 
         private static void WriteOptions<T>(GeneratorContext ctx, T obj) where T : class, ISchemaOptions
@@ -479,6 +531,38 @@ namespace ProtoBuf.Reflection
 
             bool suppressDefaultAttribute = !isOptional;
             var typeName = GetTypeName(ctx, field, out var dataFormat, out var nullabilityType, out var compatibilityLevel, out var isMap);
+            if(field.type is FieldDescriptorProto.Type.TypeMessage || field.type is FieldDescriptorProto.Type.TypeEnum)
+            {
+                string AddTypes(string s)
+                {
+                    if (string.IsNullOrEmpty(s))
+                        return s;
+
+                    var parts = s.Split('.');
+                    if (parts.Length <= 1)
+                        return s;
+
+                    var result = parts[0];
+
+                    for (int i = 1; i < parts.Length; i++)
+                    {
+                        result += ".Types." + parts[i];
+                    }
+
+                    return result;
+                }
+                if (field.ResolvedType.Parent == field.Parent)
+                {
+                    typeName = "Types." + typeName;
+                }
+                else
+                {
+                    if (!typeName.Contains("Google.Protobuf"))
+                    {
+                        typeName = AddTypes(typeName);
+                    }
+                }
+            }
             string defaultValue = GetDefaultValue(ctx, field, typeName, out var suffix);
 
             WriteDataFormatAttribute();
@@ -558,11 +642,11 @@ namespace ProtoBuf.Reflection
                     tw.WriteLine(first ? "]" : ")]");
                     if (ctx.Supports(CSharp6))
                     {
-                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}> {Escape(name)} {{ get; {(allowSet ? "set; " : "")}}} = new global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}>();");
+                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}> {Escape(name)} {{ get; {(allowSet ? "set; " : "")}}} = new global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}>();");
                     }
                     else
                     {
-                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::System.Collections.Generic.Dictionary<{keyTypeName}, {valueTypeName}> {Escape(name)} {{ get; {(allowSet ? "" : "private ")}set; }}");
+                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}> {Escape(name)} {{ get; {(allowSet ? "" : "private ")}set; }}");
                     }
                 }
                 else if (!ctx.RepeatedAsList && UseArray(field))
@@ -571,11 +655,11 @@ namespace ProtoBuf.Reflection
                 }
                 else if (ctx.Supports(CSharp6))
                 {
-                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::System.Collections.Generic.List<{typeName}> {Escape(name)} {{ get; {(allowSet ? "set; " : "")}}} = new global::System.Collections.Generic.List<{typeName}>();");
+                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.RepeatedField<{typeName}> {Escape(name)} {{ get; {(allowSet ? "set; " : "")}}} = new global::Google.Protobuf.Collections.RepeatedField<{typeName}>();");
                 }
                 else
                 {
-                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::System.Collections.Generic.List<{typeName}> {Escape(name)} {{ get; {(allowSet ? "" : "private ")}set; }}");
+                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.RepeatedField<{typeName}> {Escape(name)} {{ get; {(allowSet ? "" : "private ")}set; }}");
                 }
             }
             else if (oneOf is not null)
@@ -1014,7 +1098,7 @@ namespace ProtoBuf.Reflection
                 case FieldDescriptorProto.Type.TypeUint64:
                     return "ulong";
                 case FieldDescriptorProto.Type.TypeBytes:
-                    return UseMemory(ctx) ? "global::System.Memory<byte>" : "byte[]";
+                    return UseMemory(ctx) ? "global::System.Memory<byte>" : "Google.Protobuf.ByteString";
                 case FieldDescriptorProto.Type.TypeEnum:
                     switch (field.TypeName)
                     {

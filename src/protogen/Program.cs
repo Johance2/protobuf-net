@@ -185,7 +185,7 @@ namespace protogen
                     // add the library area for auto-imports (library inbuilts)
                     set.AddImportPath(Path.GetDirectoryName(typeof(Program).Assembly.Location));
 
-                    if (inputFiles.Count == 1 && importPaths.Count == 1)
+                    if (inputFiles.Count == 1 && importPaths.Count >= 1)
                     {
                         SearchOption? searchOption = null;
                         if (inputFiles[0] == "**/*.proto"
@@ -203,9 +203,12 @@ namespace protogen
                         {
                             inputFiles.Clear();
                             var searchRoot = importPaths[0];
-                            foreach (var path in Directory.EnumerateFiles(importPaths[0], "*.proto", searchOption.Value))
+                            foreach (var dir in importPaths)
                             {
-                                inputFiles.Add(MakeRelativePath(searchRoot, path));
+                                foreach (var path in Directory.EnumerateFiles(dir, "*.proto", searchOption.Value))
+                                {
+                                    inputFiles.Add(MakeRelativePath(searchRoot, path));
+                                }
                             }
                         }
                     }

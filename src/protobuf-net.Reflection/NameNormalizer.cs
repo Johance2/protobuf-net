@@ -62,6 +62,7 @@ namespace ProtoBuf.Reflection
         protected static string AutoCapitalize(string identifier)
         {
             if (string.IsNullOrEmpty(identifier)) return identifier;
+
             // if all upper-case, make proper-case
             if (Regex.IsMatch(identifier, "^[_A-Z0-9]*$"))
             {
@@ -71,9 +72,15 @@ namespace ProtoBuf.Reflection
             // if all lower-case, make proper case
             if (Regex.IsMatch(identifier, "^[_a-z0-9]*$"))
             {
-                return Regex.Replace(identifier, "(^|_)([a-z0-9])([a-z0-9]*)",
-                    match => match.Groups[2].Value.ToUpperInvariant() + match.Groups[3].Value.ToLowerInvariant());
+                return Regex.Replace(identifier, "(^|_)([0-9]*)([a-z0-9])([a-z0-9]*)",
+                    match => match.Groups[2].Value + match.Groups[3].Value.ToUpperInvariant() + match.Groups[4].Value.ToLowerInvariant());
             }
+
+            if (Char.IsLower(identifier[0]))
+            {
+                identifier = "" + Char.ToUpper(identifier[0]) + identifier.Substring(1);
+            }
+
             // just remove underscores - leave their chosen casing alone
             return identifier.Replace("_", "");
         }
@@ -82,6 +89,7 @@ namespace ProtoBuf.Reflection
         /// </summary>
         protected static string AutoPluralize(string identifier)
         {
+            return identifier;
             // horribly Anglo-centric and only covers common cases; but: is swappable
 
             if (string.IsNullOrEmpty(identifier) || identifier.Length == 1) return identifier;
@@ -160,7 +168,12 @@ namespace ProtoBuf.Reflection
         {
             var name = definition?.Options?.GetOptions()?.Name;
             if (!string.IsNullOrWhiteSpace(name)) return name;
-            return GetName(definition.Parent as DescriptorProto, GetName(definition.Name), definition.Name, false);
+            var name2 = definition.Name;
+            if(name2.Contains("_"))
+            {
+                name2 = GetName(name2);
+            }
+            return GetName(definition.Parent as DescriptorProto, name2, definition.Name, false);
         }
         /// <summary>
         /// Suggest a normalized identifier
@@ -246,6 +259,7 @@ namespace ProtoBuf.Reflection
         /// </summary>
         protected virtual string GetName(DescriptorProto parent, string preferred, string fallback, bool includeDescendents)
         {
+            return preferred;
             var conflicts = BuildConflicts(parent, includeDescendents);
 
             if (!conflicts.Contains(preferred)) return preferred;
