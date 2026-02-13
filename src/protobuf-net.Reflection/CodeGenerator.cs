@@ -169,6 +169,7 @@ namespace ProtoBuf.Reflection
         }
         static string ToPascalCase(string s)
         {
+            s = Path.GetFileName(s);
             return string.Concat(
                 s.Split('_')
                  .Where(x => x.Length > 0)
@@ -322,7 +323,7 @@ namespace ProtoBuf.Reflection
 
             if (message.Parent as DescriptorProto != null)
             {
-                var tw = ctx.Write($"{GetAccess(GetAccess(message))} partial class Types");
+                var tw = ctx.WriteLine($"{GetAccess(GetAccess(message))} partial class Types");
                 ctx.WriteLine("{").Indent();
             }
             WriteMessageHeader(ctx, message, ref state);
@@ -370,7 +371,7 @@ namespace ProtoBuf.Reflection
             WriteMessageFooter(ctx, message, ref state);
             if (message.Parent as DescriptorProto != null)
             {
-                ctx.WriteLine("}").Outdent();
+                ctx.Outdent().WriteLine("}");
             }
         }
 
@@ -431,12 +432,22 @@ namespace ProtoBuf.Reflection
         protected virtual void WriteEnum(GeneratorContext ctx, EnumDescriptorProto obj)
         {
             object state = null;
+
+            if (obj.Parent as DescriptorProto != null)
+            {
+                var tw = ctx.WriteLine($"{GetAccess(GetAccess(obj))} partial class Types");
+                ctx.WriteLine("{").Indent();
+            }
             WriteEnumHeader(ctx, obj, ref state);
             foreach (var inner in obj.Values)
             {
                 WriteEnumValue(ctx, inner, ref state);
             }
             WriteEnumFooter(ctx, obj, ref state);
+            if (obj.Parent as DescriptorProto != null)
+            {
+                ctx.Outdent().WriteLine("}").Outdent();
+            }
         }
 
         /// <summary>

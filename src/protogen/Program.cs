@@ -20,6 +20,7 @@ namespace protogen
                 bool help = false; // -h, --help
                 var importPaths = new List<string>(); // -I{PATH}, --proto_path={PATH}
                 var inputFiles = new List<string>(); // {PROTO_FILES} (everything not `-`)
+                var ignorFiles = new List<string>(); // {PROTO_FILES} (everything not `-`)
                 bool exec = false;
                 string package = null; // --package=foo
                 string grpcMode = null, grpcUrl = null, grpcService = null;
@@ -85,6 +86,9 @@ namespace protogen
                             break;
                         case "--proto_path":
                             importPaths.Add(rhs);
+                            break;
+                        case "--ignor_proto_path":
+                            ignorFiles.Add(rhs.ToLower());
                             break;
                         case "--pwd":
                             Console.WriteLine($"Current Directory: {Directory.GetCurrentDirectory()}");
@@ -185,7 +189,7 @@ namespace protogen
                     // add the library area for auto-imports (library inbuilts)
                     set.AddImportPath(Path.GetDirectoryName(typeof(Program).Assembly.Location));
 
-                    if (inputFiles.Count == 1 && importPaths.Count == 1)
+                    if (inputFiles.Count == 1 && importPaths.Count >= 1)
                     {
                         SearchOption? searchOption = null;
                         if (inputFiles[0] == "**/*.proto"
@@ -203,9 +207,15 @@ namespace protogen
                         {
                             inputFiles.Clear();
                             var searchRoot = importPaths[0];
-                            foreach (var path in Directory.EnumerateFiles(importPaths[0], "*.proto", searchOption.Value))
+                            foreach (var dir in importPaths)
                             {
-                                inputFiles.Add(MakeRelativePath(searchRoot, path));
+                                foreach (var path in Directory.EnumerateFiles(dir, "*.proto", searchOption.Value))
+                                {
+                                    if (!ignorFiles.Contains(Path.GetFileName(path).ToLower()))
+                                    {
+                                        inputFiles.Add(MakeRelativePath(searchRoot, path));
+                                    }
+                                }
                             }
                         }
                     }
