@@ -1255,7 +1255,7 @@ namespace ProtoBuf
                 var serializer = TypeModel.TryGetSerializer<T>(Model);
                 if (serializer is null)
                 {
-                    return (T)DeserializeRootFallback(value, typeof(T));
+                    return (T)DeserializeRootFallback(value, value.GetType());
                 }
                 else
                 {

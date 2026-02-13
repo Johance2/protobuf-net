@@ -20,6 +20,7 @@ namespace protogen
                 bool help = false; // -h, --help
                 var importPaths = new List<string>(); // -I{PATH}, --proto_path={PATH}
                 var inputFiles = new List<string>(); // {PROTO_FILES} (everything not `-`)
+                var ignorFiles = new List<string>(); // {PROTO_FILES} (everything not `-`)
                 bool exec = false;
                 string package = null; // --package=foo
                 string grpcMode = null, grpcUrl = null, grpcService = null;
@@ -85,6 +86,9 @@ namespace protogen
                             break;
                         case "--proto_path":
                             importPaths.Add(rhs);
+                            break;
+                        case "--ignor_proto_path":
+                            ignorFiles.Add(rhs.ToLower());
                             break;
                         case "--pwd":
                             Console.WriteLine($"Current Directory: {Directory.GetCurrentDirectory()}");
@@ -207,7 +211,10 @@ namespace protogen
                             {
                                 foreach (var path in Directory.EnumerateFiles(dir, "*.proto", searchOption.Value))
                                 {
-                                    inputFiles.Add(MakeRelativePath(searchRoot, path));
+                                    if (!ignorFiles.Contains(Path.GetFileName(path).ToLower()))
+                                    {
+                                        inputFiles.Add(MakeRelativePath(searchRoot, path));
+                                    }
                                 }
                             }
                         }
