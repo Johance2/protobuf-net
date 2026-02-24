@@ -310,17 +310,17 @@ namespace ProtoBuf.Reflection
                 ctx.WriteLine("#error message_set_wire_format is not currently implemented").WriteLine();
             }
 
-            ctx.WriteLine($"private global::ProtoBuf.IExtension {FieldPrefix}extensionData;")
-                .WriteLine($"public override global::ProtoBuf.IExtension GetExtensionObject(bool createIfMissing)");
+            //ctx.WriteLine($"private global::ProtoBuf.IExtension {FieldPrefix}extensionData;")
+            //    .WriteLine($"public override global::ProtoBuf.IExtension GetExtensionObject(bool createIfMissing)");
 
-            if (ctx.Supports(CSharp6))
-            {
-                ctx.Indent().WriteLine($"=> global::ProtoBuf.Extensible.GetExtensionObject(ref {FieldPrefix}extensionData, createIfMissing);").Outdent().WriteLine();
-            }
-            else
-            {
-                ctx.WriteLine("{").Indent().WriteLine($"return global::ProtoBuf.Extensible.GetExtensionObject(ref {FieldPrefix}extensionData, createIfMissing);").Outdent().WriteLine("}");
-            }
+            //if (ctx.Supports(CSharp6))
+            //{
+            //    ctx.Indent().WriteLine($"=> global::ProtoBuf.Extensible.GetExtensionObject(ref {FieldPrefix}extensionData, createIfMissing);").Outdent().WriteLine();
+            //}
+            //else
+            //{
+            //    ctx.WriteLine("{").Indent().WriteLine($"return global::ProtoBuf.Extensible.GetExtensionObject(ref {FieldPrefix}extensionData, createIfMissing);").Outdent().WriteLine("}");
+            //}
 
             ctx = ctx.WriteLine($"public {Escape(name)}() {{}}");
             ctx = ctx.WriteLine($"public {Escape(name)}({Escape(name)} other) {{ MergeFrom(other);}}");
@@ -642,24 +642,24 @@ namespace ProtoBuf.Reflection
                     tw.WriteLine(first ? "]" : ")]");
                     if (ctx.Supports(CSharp6))
                     {
-                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}> {Escape(name)} {{ get; {(allowSet ? "set; " : "")}}} = new global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}>();");
+                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}> {Escape(name)} = new global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}>();");
                     }
                     else
                     {
-                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}> {Escape(name)} {{ get; {(allowSet ? "" : "private ")}set; }}");
+                        ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.MapField<{keyTypeName}, {valueTypeName}> {Escape(name)};");
                     }
                 }
                 else if (!ctx.RepeatedAsList && UseArray(field))
                 {
-                    ctx.WriteLine($"{GetAccess(GetAccess(field))} {typeName}[] {Escape(name)} {{ get; set; }}");
+                    ctx.WriteLine($"{GetAccess(GetAccess(field))} {typeName}[] {Escape(name)};");
                 }
                 else if (ctx.Supports(CSharp6))
                 {
-                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.RepeatedField<{typeName}> {Escape(name)} {{ get; {(allowSet ? "set; " : "")}}} = new global::Google.Protobuf.Collections.RepeatedField<{typeName}>();");
+                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.RepeatedField<{typeName}> {Escape(name)} = new global::Google.Protobuf.Collections.RepeatedField<{typeName}>();");
                 }
                 else
                 {
-                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.RepeatedField<{typeName}> {Escape(name)} {{ get; {(allowSet ? "" : "private ")}set; }}");
+                    ctx.WriteLine($"{GetAccess(GetAccess(field))} global::Google.Protobuf.Collections.RepeatedField<{typeName}> {Escape(name)};");
                 }
             }
             else if (oneOf is not null)
@@ -756,15 +756,17 @@ namespace ProtoBuf.Reflection
             }
             else
             {
-                tw = ctx.Write($"{GetAccess(GetAccess(field))} {typeName}{(IsNullableType(ctx, field, defaultValue, isOptional) ? "?" : "")} {Escape(name)} {{ get; set; }}");
+                tw = ctx.Write($"{GetAccess(GetAccess(field))} {typeName}{(IsNullableType(ctx, field, defaultValue, isOptional) ? "?" : "")} {Escape(name)}");
                 if (!string.IsNullOrWhiteSpace(defaultValue) && ctx.Supports(CSharp6)) tw.Write($" = {defaultValue}{suffix};");
+                else
+                    tw.Write($";");
                 tw.WriteLine();
             }
             ctx.WriteLine();
 
-            string PropGetPrefix() => ctx.Supports(CSharp7) ? "get => " : "get { return ";
-            string PropSetPrefix() => ctx.Supports(CSharp7) ? "set => " : "set { ";
-            string PropSuffix() => ctx.Supports(CSharp7) ? "" : " }";
+            string PropGetPrefix() => ctx.Supports(CSharp7) ? "get => " : "";
+            string PropSetPrefix() => ctx.Supports(CSharp7) ? "set => " : "";
+            string PropSuffix() => ctx.Supports(CSharp7) ? "" : " ;";
         }
 
         private static string GetOneOfFieldName(OneofDescriptorProto obj) => FieldPrefix + obj.Name;
