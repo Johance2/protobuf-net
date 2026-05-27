@@ -62,7 +62,6 @@ namespace ProtoBuf.Reflection
         protected static string AutoCapitalize(string identifier)
         {
             if (string.IsNullOrEmpty(identifier)) return identifier;
-
             // if all upper-case, make proper-case
             if (Regex.IsMatch(identifier, "^[_A-Z0-9]*$"))
             {
@@ -80,7 +79,6 @@ namespace ProtoBuf.Reflection
             {
                 identifier = "" + Char.ToUpper(identifier[0]) + identifier.Substring(1);
             }
-
             // just remove underscores - leave their chosen casing alone
             return identifier.Replace("_", "");
         }

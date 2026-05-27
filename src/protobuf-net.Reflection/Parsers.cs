@@ -410,6 +410,8 @@ namespace Google.Protobuf.Reflection
         public partial class ReservedRange : IReservedRange { }
 
         internal Token SourceLocation { get; set; }
+        internal string[] LeadingComments { get; set; }
+        internal string[] TrailingComments { get; set; }
         internal enum SpecialKind
         {
             None,
@@ -497,13 +499,15 @@ namespace Google.Protobuf.Reflection
 
         internal int MaxField => (Options?.MessageSetWireFormat == true) ? int.MaxValue : FieldDescriptorProto.DefaultMaxField;
         int IMessage.MaxField => MaxField;
-        internal static bool TryParse(ParserContext ctx, IHazNames parent, out DescriptorProto obj)
+        internal static bool TryParse(ParserContext ctx, IHazNames parent, out DescriptorProto obj, string[] leadingComments = null)
         {
             var name = ctx.Tokens.Consume(TokenType.AlphaNumeric, out var token);
             ctx.CheckNames(parent, name, ctx.Tokens.Previous);
             if (ctx.TryReadObject(out obj))
             {
                 obj.Name = name;
+                obj.LeadingComments = leadingComments ?? ctx.TakeComments();
+                obj.TrailingComments = ctx.TakeTrailingComments();
                 obj.SourceLocation = token;
                 GenerateSyntheticOneOfs(obj);
                 return true;
@@ -531,14 +535,16 @@ namespace Google.Protobuf.Reflection
             var tokens = ctx.Tokens;
             if (tokens.ConsumeIf(TokenType.AlphaNumeric, "message"))
             {
-                if (DescriptorProto.TryParse(ctx, this, out var obj))
+                var comments = ctx.TakeComments();
+                if (DescriptorProto.TryParse(ctx, this, out var obj, comments))
                 {
                     NestedTypes.Add(obj);
                 }
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "enum"))
             {
-                if (EnumDescriptorProto.TryParse(ctx, this, out var obj))
+                var comments = ctx.TakeComments();
+                if (EnumDescriptorProto.TryParse(ctx, this, out var obj, comments))
                     EnumTypes.Add(obj);
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "option"))
@@ -559,7 +565,8 @@ namespace Google.Protobuf.Reflection
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "oneof"))
             {
-                OneofDescriptorProto.Parse(ctx, this);
+                var comments = ctx.TakeComments();
+                OneofDescriptorProto.Parse(ctx, this, comments);
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "map"))
             {
@@ -567,7 +574,8 @@ namespace Google.Protobuf.Reflection
             }
             else
             {
-                if (FieldDescriptorProto.TryParse(ctx, this, false, out var obj))
+                var comments = ctx.TakeComments();
+                if (FieldDescriptorProto.TryParse(ctx, this, false, out var obj, comments))
                     Fields.Add(obj);
             }
         }
@@ -784,19 +792,23 @@ namespace Google.Protobuf.Reflection
     /// </summary>
     public partial class OneofDescriptorProto : ISchemaObject
     {
+        internal string[] LeadingComments { get; set; }
+        internal string[] TrailingComments { get; set; }
         internal DescriptorProto Parent { get; set; }
-        internal static void Parse(ParserContext ctx, DescriptorProto parent)
+        internal static void Parse(ParserContext ctx, DescriptorProto parent, string[] leadingComments = null)
         {
             ctx.AbortState = AbortState.Object;
             var oneOf = new OneofDescriptorProto
             {
                 Name = ctx.Tokens.Consume(TokenType.AlphaNumeric)
             };
+            oneOf.LeadingComments = leadingComments ?? ctx.TakeComments();
             parent.OneofDecls.Add(oneOf);
             oneOf.Parent = parent;
 
             if (ctx.TryReadObjectImpl(oneOf))
             {
+                oneOf.TrailingComments = ctx.TakeTrailingComments();
                 ctx.AbortState = AbortState.None;
             }
         }
@@ -809,7 +821,8 @@ namespace Google.Protobuf.Reflection
             }
             else
             {
-                if (FieldDescriptorProto.TryParse(ctx, Parent, true, out var field))
+                var comments = ctx.TakeComments();
+                if (FieldDescriptorProto.TryParse(ctx, Parent, true, out var field, comments))
                 {
                     field.OneofIndex = Parent.OneofDecls.Count - 1;
                     Parent.Fields.Add(field);
@@ -843,6 +856,7 @@ namespace Google.Protobuf.Reflection
     /// </summary>
     public partial class FileDescriptorProto : ISchemaObject, IMessage, IType
     {
+        internal string[] LeadingComments { get; set; }
         internal static FileDescriptorProto GetFile(IType type)
         {
             while (type != null)
@@ -919,12 +933,14 @@ namespace Google.Protobuf.Reflection
             var tokens = ctx.Tokens;
             if (tokens.ConsumeIf(TokenType.AlphaNumeric, "message"))
             {
-                if (DescriptorProto.TryParse(ctx, this, out var obj))
+                var comments = ctx.TakeComments();
+                if (DescriptorProto.TryParse(ctx, this, out var obj, comments))
                     MessageTypes.Add(obj);
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "enum"))
             {
-                if (EnumDescriptorProto.TryParse(ctx, this, out var obj))
+                var comments = ctx.TakeComments();
+                if (EnumDescriptorProto.TryParse(ctx, this, out var obj, comments))
                     EnumTypes.Add(obj);
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "extend"))
@@ -933,7 +949,8 @@ namespace Google.Protobuf.Reflection
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "service"))
             {
-                if (ServiceDescriptorProto.TryParse(ctx, out var obj))
+                var comments = ctx.TakeComments();
+                if (ServiceDescriptorProto.TryParse(ctx, out var obj, comments))
                     Services.Add(obj);
             }
             else if (tokens.ConsumeIf(TokenType.AlphaNumeric, "import"))
@@ -997,9 +1014,10 @@ namespace Google.Protobuf.Reflection
         internal void ParseSchema(TextReader schema, List<Error> errors, string file)
         {
             Syntax = "";
-            using var ctx = new ParserContext(this, new Peekable<Token>(schema.Tokenize(file).RemoveCommentsAndWhitespace(), errors), errors);
+            using var ctx = new ParserContext(this, new Peekable<Token>(schema.Tokenize(file), errors), errors);
             var tokens = ctx.Tokens;
             tokens.Peek(out Token startOfFile); // want this for "stuff you didn't do" warnings
+            LeadingComments = ctx.TakeComments();
 
             // read the file into the object
             ctx.Fill(this);
@@ -1996,6 +2014,8 @@ namespace Google.Protobuf.Reflection
         /// <inheritdoc/>
         public override string ToString() => Name;
         internal IType Parent { get; set; }
+        internal string[] LeadingComments { get; set; }
+        internal string[] TrailingComments { get; set; }
         string IType.FullyQualifiedName => FullyQualifiedName;
         IType IType.Parent => Parent;
         IType IType.Find(string name) => null;
@@ -2003,13 +2023,15 @@ namespace Google.Protobuf.Reflection
 
         List<EnumValueDescriptorProto> IReserved<EnumReservedRange, EnumValueDescriptorProto>.Fields => Values;
 
-        internal static bool TryParse(ParserContext ctx, IHazNames parent, out EnumDescriptorProto obj)
+        internal static bool TryParse(ParserContext ctx, IHazNames parent, out EnumDescriptorProto obj, string[] leadingComments = null)
         {
             var name = ctx.Tokens.Consume(TokenType.AlphaNumeric);
             ctx.CheckNames(parent, name, ctx.Tokens.Previous);
             if (ctx.TryReadObject(out obj))
             {
                 obj.Name = name;
+                obj.LeadingComments = leadingComments ?? ctx.TakeComments();
+                obj.TrailingComments = ctx.TakeTrailingComments();
                 return true;
             }
             return false;
@@ -2029,7 +2051,8 @@ namespace Google.Protobuf.Reflection
             }
             else
             {
-                Values.Add(EnumValueDescriptorProto.Parse(ctx));
+                var comments = ctx.TakeComments();
+                Values.Add(EnumValueDescriptorProto.Parse(ctx, comments));
             }
             ctx.AbortState = AbortState.None;
         }
@@ -2071,10 +2094,12 @@ namespace Google.Protobuf.Reflection
 
         internal IMessage Parent { get; set; }
         internal Token TypeToken { get; set; }
+        internal string[] LeadingComments { get; set; }
+        internal string[] TrailingComments { get; set; }
 
         internal int MaxField => Parent?.MaxField ?? DefaultMaxField;
 
-        internal static bool TryParse(ParserContext ctx, IMessage parent, bool isOneOf, out FieldDescriptorProto field)
+        internal static bool TryParse(ParserContext ctx, IMessage parent, bool isOneOf, out FieldDescriptorProto field, string[] leadingComments = null)
         {
             void NotAllowedOneOf(ParserContext context, ErrorCode errorCode)
             {
@@ -2195,10 +2220,13 @@ namespace Google.Protobuf.Reflection
                 label = label,
                 TypeToken = typeToken // internal property that helps give useful error messages
             };
+            field.LeadingComments = leadingComments ?? ctx.TakeComments();
             if (field.label == Label.LabelOptional && explicitOptional && ctx.Syntax != FileDescriptorProto.SyntaxProto2)
             {
                 field.Proto3Optional = true;
             }
+
+            field.TrailingComments = ctx.TakeTrailingComments();
 
             if (!isGroup)
             {
@@ -2339,17 +2367,21 @@ namespace Google.Protobuf.Reflection
         /// <inheritdoc/>
         public override string ToString() => Name;
         internal IType Parent { get; set; }
+        internal string[] LeadingComments { get; set; }
+        internal string[] TrailingComments { get; set; }
         string IType.FullyQualifiedName => FullyQualifiedName;
         IType IType.Parent => Parent;
         IType IType.Find(string name) => Methods.Find(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
         internal string FullyQualifiedName { get; set; }
 
-        internal static bool TryParse(ParserContext ctx, out ServiceDescriptorProto obj)
+        internal static bool TryParse(ParserContext ctx, out ServiceDescriptorProto obj, string[] leadingComments = null)
         {
             var name = ctx.Tokens.Consume(TokenType.AlphaNumeric);
             if (ctx.TryReadObject(out obj))
             {
                 obj.Name = name;
+                obj.LeadingComments = leadingComments ?? ctx.TakeComments();
+                obj.TrailingComments = ctx.TakeTrailingComments();
                 return true;
             }
             return false;
@@ -2366,8 +2398,9 @@ namespace Google.Protobuf.Reflection
             }
             else
             {
+                    var comments = ctx.TakeComments();
                 // is a method
-                Methods.Add(MethodDescriptorProto.Parse(ctx));
+                    Methods.Add(MethodDescriptorProto.Parse(ctx, comments));
             }
             ctx.AbortState = AbortState.None;
         }
@@ -2381,6 +2414,8 @@ namespace Google.Protobuf.Reflection
         /// <inheritdoc/>
         public override string ToString() => Name;
         internal IType Parent { get; set; }
+        internal string[] LeadingComments { get; set; }
+        internal string[] TrailingComments { get; set; }
         string IType.FullyQualifiedName => FullyQualifiedName;
         IType IType.Parent => Parent;
         IType IType.Find(string name) => null;
@@ -2389,7 +2424,7 @@ namespace Google.Protobuf.Reflection
         internal Token InputTypeToken { get; set; }
         internal Token OutputTypeToken { get; set; }
 
-        internal static MethodDescriptorProto Parse(ParserContext ctx)
+        internal static MethodDescriptorProto Parse(ParserContext ctx, string[] leadingComments = null)
         {
             var tokens = ctx.Tokens;
             tokens.Consume(TokenType.AlphaNumeric, "rpc");
@@ -2414,6 +2449,7 @@ namespace Google.Protobuf.Reflection
                 InputTypeToken = inputTypeToken,
                 OutputTypeToken = outputTypeToken
             };
+            method.LeadingComments = leadingComments ?? ctx.TakeComments();
             if (isInputStream) method.ClientStreaming = true;
             if (isOutputStream) method.ServerStreaming = true;
 
@@ -2427,6 +2463,7 @@ namespace Google.Protobuf.Reflection
             {
                 tokens.Consume(TokenType.Symbol, ";");
             }
+            method.TrailingComments = ctx.TakeTrailingComments();
             return method;
         }
 
@@ -2442,7 +2479,9 @@ namespace Google.Protobuf.Reflection
     /// </summary>
     public partial class EnumValueDescriptorProto : IField
     {
-        internal static EnumValueDescriptorProto Parse(ParserContext ctx)
+        internal string[] LeadingComments { get; set; }
+        internal string[] TrailingComments { get; set; }
+        internal static EnumValueDescriptorProto Parse(ParserContext ctx, string[] leadingComments = null)
         {
             var tokens = ctx.Tokens;
             string name = tokens.Consume(TokenType.AlphaNumeric);
@@ -2450,11 +2489,13 @@ namespace Google.Protobuf.Reflection
             var value = tokens.ConsumeInt32();
 
             var obj = new EnumValueDescriptorProto { Name = name, Number = value };
+            obj.LeadingComments = leadingComments ?? ctx.TakeComments();
             if (tokens.ConsumeIf(TokenType.Symbol, "["))
             {
                 obj.Options = ctx.ParseOptionBlock(obj.Options);
             }
             tokens.Consume(TokenType.Symbol, ";");
+            obj.TrailingComments = ctx.TakeTrailingComments();
             return obj;
         }
         internal EnumDescriptorProto Parent { get; set; }
@@ -3334,6 +3375,12 @@ namespace ProtoBuf.Reflection
         public List<Error> Errors { get; }
 
         public void Dispose() { Tokens?.Dispose(); }
+
+        internal string[] TakeComments()
+            => Tokens?.TakeComments();
+
+        internal string[] TakeTrailingComments()
+            => Tokens?.TakeTrailingComments();
 
         internal void CheckNames(IHazNames parent, string name, Token token
 #if DEBUG && !NETFRAMEWORK

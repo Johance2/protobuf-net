@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Security;
 using ProtoBuf.Internal;
 using System.Runtime.CompilerServices;
 
@@ -129,6 +130,57 @@ namespace ProtoBuf.Reflection
 
         private const string AdditionalSuppressionCodes = ", CS8981, IDE0079, IDE1006, RCS1036, RCS1057, RCS1085, RCS1192";
 
+        private static void WriteComments(GeneratorContext ctx, string[] leadingComments, string[] trailingComments, bool xmlDoc)
+        {
+            if ((leadingComments == null || leadingComments.Length == 0)
+                && (trailingComments == null || trailingComments.Length == 0))
+            {
+                return;
+            }
+
+            var lines = (leadingComments ?? Array.Empty<string>())
+                .Concat(trailingComments ?? Array.Empty<string>())
+                .Where(static x => !string.IsNullOrWhiteSpace(x))
+                .SelectMany(static comment => comment
+                    .Replace("\r\n", "\n")
+                    .Replace('\r', '\n')
+                    .Split('\n')
+                    .Select(line => line.Trim()))
+                .Select(line =>
+                {
+                    while (line.StartsWith("*", StringComparison.Ordinal))
+                    {
+                        line = line.Substring(1).TrimStart();
+                    }
+                    return line;
+                })
+                .Where(static x => !string.IsNullOrWhiteSpace(x))
+                .ToArray();
+
+            if (lines.Length == 0)
+            {
+                return;
+            }
+
+            if (!xmlDoc)
+            {
+                foreach (var line in lines)
+                {
+                    ctx.WriteLine("// " + line);
+                }
+                return;
+            }
+
+            ctx.WriteLine("/// <summary>");
+            foreach (var line in lines)
+            {
+                ctx.WriteLine(string.IsNullOrWhiteSpace(line)
+                    ? "///"
+                    : "/// " + SecurityElement.Escape(line));
+            }
+            ctx.WriteLine("/// </summary>");
+        }
+
         /// <summary>
         /// Start a file
         /// </summary>
@@ -140,7 +192,10 @@ namespace ProtoBuf.Reflection
                .WriteLine("//   Consider using 'partial classes' to extend these types")
                .WriteLine($"//   Input: {Path.GetFileName(ctx.File.Name)}")
                .WriteLine("// </auto-generated>")
-               .WriteLine()
+               .WriteLine();
+
+            WriteComments(ctx, file.LeadingComments, null, xmlDoc: false);
+            tw.WriteLine()
                .WriteLine("#region Designer generated code")
                .Write($"#pragma warning disable {prefix}0612, {prefix}0618, {prefix}1591, {prefix}3021");
             if (ctx.Supports(CSharp6))
@@ -183,6 +238,7 @@ namespace ProtoBuf.Reflection
         protected override void WriteEnumHeader(GeneratorContext ctx, EnumDescriptorProto @enum, ref object state)
         {
             var name = ctx.NameNormalizer.GetName(@enum);
+            WriteComments(ctx, @enum.LeadingComments, @enum.TrailingComments, xmlDoc: true);
             var tw = ctx.Write("[global::ProtoBuf.ProtoContract(");
             if (name != @enum.Name) tw.Write($@"Name = @""{@enum.Name}""");
             tw.WriteLine(")]");
@@ -203,6 +259,7 @@ namespace ProtoBuf.Reflection
         protected override void WriteEnumValue(GeneratorContext ctx, EnumValueDescriptorProto @enum, ref object state)
         {
             var name = ctx.NameNormalizer.GetName(@enum);
+            WriteComments(ctx, @enum.LeadingComments, @enum.TrailingComments, xmlDoc: true);
             if (name != @enum.Name)
             {
                 var tw = ctx.Write("[global::ProtoBuf.ProtoEnum(");
@@ -293,6 +350,7 @@ namespace ProtoBuf.Reflection
         protected override void WriteMessageHeader(GeneratorContext ctx, DescriptorProto message, ref object state)
         {
             var name = ctx.NameNormalizer.GetName(message);
+            WriteComments(ctx, message.LeadingComments, message.TrailingComments, xmlDoc: true);
             var tw = ctx.Write("[global::ProtoBuf.ProtoContract(");
             if (name != message.Name) tw.Write($@"Name = @""{message.Name}""");
             tw.WriteLine(")]");
@@ -509,6 +567,7 @@ namespace ProtoBuf.Reflection
         protected override void WriteField(GeneratorContext ctx, FieldDescriptorProto field, ref object state, OneOfStub[] oneOfs)
         {
             var name = ctx.NameNormalizer.GetName(field);
+            WriteComments(ctx, field.LeadingComments, field.TrailingComments, xmlDoc: true);
             var tw = ctx.Write($"[global::ProtoBuf.ProtoMember({field.Number}");
             if (name != field.Name)
             {
@@ -881,6 +940,10 @@ namespace ProtoBuf.Reflection
         /// </summary>
         protected override void WriteOneOfEnumHeader(GeneratorContext ctx, OneofDescriptorProto oneof, ref object state)
         {
+            if (ctx.OneOfEnums)
+            {
+                WriteComments(ctx, oneof.LeadingComments, oneof.TrailingComments, xmlDoc: true);
+            }
             ctx.WriteLine().WriteLine($"public enum {ctx.NameNormalizer.GetName(oneof)}{OneOfEnumSuffixEnum}").WriteLine("{").Indent().WriteLine("None = 0,");
         }
         /// <summary>
@@ -904,6 +967,10 @@ namespace ProtoBuf.Reflection
         /// </summary>
         protected override void WriteOneOfDiscriminator(GeneratorContext ctx, OneofDescriptorProto oneof, ref object state)
         {
+            if (!ctx.OneOfEnums)
+            {
+                WriteComments(ctx, oneof.LeadingComments, oneof.TrailingComments, xmlDoc: true);
+            }
             var name = ctx.NameNormalizer.GetName(oneof);
             var fieldName = GetOneOfFieldName(oneof);
             if (ctx.Supports(CSharp6))
@@ -1283,6 +1350,7 @@ namespace ProtoBuf.Reflection
         protected override void WriteServiceHeader(GeneratorContext ctx, ServiceDescriptorProto service, ref object state)
         {
             var name = ctx.NameNormalizer.GetName(service);
+            WriteComments(ctx, service.LeadingComments, service.TrailingComments, xmlDoc: true);
             if (ctx.EmitServicesFor(ServiceKinds.Grpc))
             {
                 var tw = ctx.Write("[global::ProtoBuf.Grpc.Configuration.Service(@\"");
@@ -1313,6 +1381,7 @@ namespace ProtoBuf.Reflection
         protected override void WriteServiceMethod(GeneratorContext ctx, MethodDescriptorProto method, ref object state)
         {
             var name = ctx.NameNormalizer.GetName(method);
+            WriteComments(ctx, method.LeadingComments, method.TrailingComments, xmlDoc: true);
             if (name != method.Name)
             {
                 if (ctx.EmitServicesFor(ServiceKinds.Grpc))
