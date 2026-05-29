@@ -507,9 +507,10 @@ namespace Google.Protobuf.Reflection
             {
                 obj.Name = name;
                 obj.LeadingComments = leadingComments ?? ctx.TakeComments();
-                obj.TrailingComments = ctx.TakeTrailingComments();
                 obj.SourceLocation = token;
                 GenerateSyntheticOneOfs(obj);
+                ctx.Tokens.Peek(out _);
+                obj.TrailingComments = ctx.TakeTrailingComments();
                 return true;
             }
             return false;
@@ -808,6 +809,7 @@ namespace Google.Protobuf.Reflection
 
             if (ctx.TryReadObjectImpl(oneOf))
             {
+                ctx.Tokens.Peek(out _);
                 oneOf.TrailingComments = ctx.TakeTrailingComments();
                 ctx.AbortState = AbortState.None;
             }
@@ -2031,6 +2033,7 @@ namespace Google.Protobuf.Reflection
             {
                 obj.Name = name;
                 obj.LeadingComments = leadingComments ?? ctx.TakeComments();
+                ctx.Tokens.Peek(out _);
                 obj.TrailingComments = ctx.TakeTrailingComments();
                 return true;
             }
@@ -2226,8 +2229,6 @@ namespace Google.Protobuf.Reflection
                 field.Proto3Optional = true;
             }
 
-            field.TrailingComments = ctx.TakeTrailingComments();
-
             if (!isGroup)
             {
                 if (tokens.ConsumeIf(TokenType.Symbol, "["))
@@ -2237,6 +2238,8 @@ namespace Google.Protobuf.Reflection
 
                 tokens.Consume(TokenType.Symbol, ";");
             }
+            tokens.Peek(out _);
+            field.TrailingComments = ctx.TakeTrailingComments();
             ctx.AbortState = AbortState.None;
             return true;
         }
@@ -2381,6 +2384,7 @@ namespace Google.Protobuf.Reflection
             {
                 obj.Name = name;
                 obj.LeadingComments = leadingComments ?? ctx.TakeComments();
+                ctx.Tokens.Peek(out _);
                 obj.TrailingComments = ctx.TakeTrailingComments();
                 return true;
             }
@@ -2398,9 +2402,9 @@ namespace Google.Protobuf.Reflection
             }
             else
             {
-                    var comments = ctx.TakeComments();
+                var comments = ctx.TakeComments();
                 // is a method
-                    Methods.Add(MethodDescriptorProto.Parse(ctx, comments));
+                Methods.Add(MethodDescriptorProto.Parse(ctx, comments));
             }
             ctx.AbortState = AbortState.None;
         }
@@ -2463,6 +2467,7 @@ namespace Google.Protobuf.Reflection
             {
                 tokens.Consume(TokenType.Symbol, ";");
             }
+            tokens.Peek(out _);
             method.TrailingComments = ctx.TakeTrailingComments();
             return method;
         }
@@ -2495,6 +2500,7 @@ namespace Google.Protobuf.Reflection
                 obj.Options = ctx.ParseOptionBlock(obj.Options);
             }
             tokens.Consume(TokenType.Symbol, ";");
+            tokens.Peek(out _);
             obj.TrailingComments = ctx.TakeTrailingComments();
             return obj;
         }
